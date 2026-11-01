@@ -24,6 +24,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.webkit.JavaScriptReplyProxy
 import androidx.webkit.ScriptHandler
 import androidx.webkit.UserAgentMetadata
 import androidx.webkit.WebSettingsCompat
@@ -41,6 +42,11 @@ class MainActivity : Activity() {
 
     private var fullscreenView: View? = null
     private var fullscreenCallback: WebChromeClient.CustomViewCallback? = null
+
+    /** Frames (by their reply proxy, one per frame) that last reported a playing video. */
+    private val playingFrames = mutableSetOf<JavaScriptReplyProxy>()
+    /** False on old WebViews without message listeners: then fall back to "on while fullscreen". */
+    private var playStateReported = false
 
     private var speedScript: ScriptHandler? = null
     private var speed = DEFAULT_SPEED
@@ -104,10 +110,16 @@ class MainActivity : Activity() {
 
         installSpeedScript()
 
-        // The page reports speed changes here so the choice survives restarts.
+        // The page reports speed changes here so the choice survives restarts, and reports
+        // "playing"/"idle" per frame so the screen stays on only while a video plays.
         if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
-            WebViewCompat.addWebMessageListener(webView, "CRSpeed", ORIGIN_RULES) { _, message, _, _, _ ->
-                message.data?.toFloatOrNull()?.takeIf { it in 0.25f..4f }?.let(::saveSpeed)
+            playStateReported = true
+            WebViewCompat.addWebMessageListener(webView, "CRSpeed", ORIGIN_RULES) { _, message, _, _, frame ->
+                when (val data = message.data) {
+                    "playing" -> { playingFrames.add(frame); updateKeepScreenOn() }
+                    "idle" -> { playingFrames.remove(frame); updateKeepScreenOn() }
+                    else -> data?.toFloatOrNull()?.takeIf { it in 0.25f..4f }?.let(::saveSpeed)
+                }
             }
         }
 
@@ -191,6 +203,11 @@ class MainActivity : Activity() {
             }
         }
 
+        override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
+            playingFrames.clear() // the old page's frames are gone; the new page reports afresh
+            updateKeepScreenOn()
+        }
+
         override fun onPageFinished(view: WebView, url: String) {
             // Fallback for very old WebView versions without document-start scripts (main frame only).
             if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
@@ -230,7 +247,7 @@ class MainActivity : Activity() {
         root.addView(view, matchParent())
         insetsController.hide(WindowInsetsCompat.Type.systemBars())
         insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        updateKeepScreenOn()
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         ViewCompat.requestApplyInsets(root)
     }
@@ -242,10 +259,20 @@ class MainActivity : Activity() {
         fullscreenCallback = null
         root.removeView(view)
         insetsController.show(WindowInsetsCompat.Type.systemBars())
-        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        updateKeepScreenOn()
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_USER
         ViewCompat.requestApplyInsets(root)
         callback?.onCustomViewHidden()
+    }
+
+    /** Keep the screen awake while a video plays (in or out of fullscreen); otherwise let it sleep. */
+    private fun updateKeepScreenOn() {
+        val keepOn = if (playStateReported) playingFrames.isNotEmpty() else fullscreenView != null
+        if (keepOn) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
     }
 
     @Deprecated("Deprecated in Java")

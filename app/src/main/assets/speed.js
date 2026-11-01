@@ -410,6 +410,23 @@
   document.addEventListener('play', () => { applyRate(); updatePlayIcon(); }, true);
   document.addEventListener('pause', updatePlayIcon, true);
 
+  // Tell the app whether a video in this frame is playing, so it keeps the screen awake only
+  // then (fullscreen or not). Sent as "playing"/"idle"; numbers on the same channel are speeds.
+  let reportedPlaying = null;
+  function reportPlaying() {
+    const playing = videos().some((v) => !v.paused && !v.ended && v.readyState > 0);
+    if (playing === reportedPlaying) return;
+    reportedPlaying = playing;
+    try { if (window.CRSpeed) window.CRSpeed.postMessage(playing ? 'playing' : 'idle'); } catch (_) {}
+  }
+  for (const type of ['play', 'playing', 'pause', 'ended', 'emptied']) {
+    document.addEventListener(type, reportPlaying, true);
+  }
+  addEventListener('pagehide', () => {
+    reportedPlaying = false;
+    try { if (window.CRSpeed) window.CRSpeed.postMessage('idle'); } catch (_) {}
+  });
+
   document.addEventListener('pointerdown', (e) => {
     if (!speedHost) return;
     if (!e.composedPath().includes(speedHost)) closeMenu(); // tap outside closes the menu
@@ -420,5 +437,5 @@
   document.addEventListener('webkitfullscreenchange', mount);
   addEventListener('resize', mount);
   addEventListener('resize', fitControls);
-  setInterval(() => { applyRate(); fitControls(); mount(); }, 500);
+  setInterval(() => { applyRate(); fitControls(); mount(); reportPlaying(); }, 500);
 })();
