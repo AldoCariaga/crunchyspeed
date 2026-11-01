@@ -5,10 +5,12 @@ import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -20,6 +22,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
+import android.widget.ProgressBar
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -39,6 +42,11 @@ class MainActivity : Activity() {
 
     private lateinit var root: FrameLayout
     private lateinit var webView: WebView
+    /** Black screen with an orange spinner that hides the page until it is mostly loaded. */
+    private lateinit var loadingOverlay: FrameLayout
+    private val hideLoadingFallback = Runnable { hideLoading() }
+    /** speed.js posts "ready" when the content has rendered; without message support, go by load progress. */
+    private val pageReportsReady get() = playStateReported
 
     private var fullscreenView: View? = null
     private var fullscreenCallback: WebChromeClient.CustomViewCallback? = null
@@ -72,6 +80,18 @@ class MainActivity : Activity() {
         root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         webView = WebView(this).apply { setBackgroundColor(Color.BLACK) }
         root.addView(webView, matchParent())
+        loadingOverlay = FrameLayout(this).apply {
+            setBackgroundColor(Color.BLACK)
+            isClickable = true // swallow taps meant for the half-loaded page underneath
+            addView(
+                ProgressBar(this@MainActivity).apply {
+                    isIndeterminate = true
+                    indeterminateTintList = ColorStateList.valueOf(ORANGE)
+                },
+                FrameLayout.LayoutParams(dp(56), dp(56), Gravity.CENTER)
+            )
+        }
+        root.addView(loadingOverlay, matchParent()) // above the WebView, below any fullscreen video
         setContentView(root)
 
         ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
@@ -114,10 +134,12 @@ class MainActivity : Activity() {
         // "playing"/"idle" per frame so the screen stays on only while a video plays.
         if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
             playStateReported = true
-            WebViewCompat.addWebMessageListener(webView, "CRSpeed", ORIGIN_RULES) { _, message, _, _, frame ->
+            WebViewCompat.addWebMessageListener(webView, "CRSpeed", ORIGIN_RULES) { _, message, _, isMainFrame, frame ->
                 when (val data = message.data) {
                     "playing" -> { playingFrames.add(frame); updateKeepScreenOn() }
                     "idle" -> { playingFrames.remove(frame); updateKeepScreenOn() }
+                    "loading" -> if (isMainFrame) showLoading()
+                    "ready" -> if (isMainFrame) hideLoading()
                     else -> data?.toFloatOrNull()?.takeIf { it in 0.25f..4f }?.let(::saveSpeed)
                 }
             }
@@ -206,9 +228,13 @@ class MainActivity : Activity() {
         override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
             playingFrames.clear() // the old page's frames are gone; the new page reports afresh
             updateKeepScreenOn()
+            showLoading()
         }
 
         override fun onPageFinished(view: WebView, url: String) {
+            // On Crunchyroll pages speed.js says when the content has rendered ("ready");
+            // anything else (an error page, or no message support) is as good as it gets now.
+            if (!pageReportsReady || !isCrunchyroll(Uri.parse(url))) hideLoading()
             // Fallback for very old WebView versions without document-start scripts (main frame only).
             if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
                 view.evaluateJavascript(speedScriptSource(), null)
@@ -222,6 +248,10 @@ class MainActivity : Activity() {
     }
 
     private inner class ChromeClient : WebChromeClient() {
+        override fun onProgressChanged(view: WebView, newProgress: Int) {
+            if (!pageReportsReady && newProgress >= REVEAL_PROGRESS) hideLoading()
+        }
+
         override fun onPermissionRequest(request: PermissionRequest) {
             // Allow Widevine (protected media) for Crunchyroll only; deny everything else.
             val wanted = request.resources.filter { it == PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID }
@@ -265,6 +295,25 @@ class MainActivity : Activity() {
         callback?.onCustomViewHidden()
     }
 
+    private fun showLoading() {
+        loadingOverlay.animate().cancel()
+        loadingOverlay.alpha = 1f
+        loadingOverlay.visibility = View.VISIBLE
+        // Never trap the user behind the spinner if a slow resource stalls the progress bar.
+        root.removeCallbacks(hideLoadingFallback)
+        root.postDelayed(hideLoadingFallback, LOADING_TIMEOUT_MS)
+    }
+
+    private fun hideLoading() {
+        root.removeCallbacks(hideLoadingFallback)
+        if (loadingOverlay.visibility != View.VISIBLE || loadingOverlay.alpha < 1f) return // gone or fading
+        loadingOverlay.animate().alpha(0f).setDuration(200).withEndAction {
+            loadingOverlay.visibility = View.GONE
+        }
+    }
+
+    private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+
     /** Keep the screen awake while a video plays (in or out of fullscreen); otherwise let it sleep. */
     private fun updateKeepScreenOn() {
         val keepOn = if (playStateReported) playingFrames.isNotEmpty() else fullscreenView != null
@@ -302,6 +351,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        root.removeCallbacks(hideLoadingFallback)
         root.removeAllViews()
         webView.destroy()
         super.onDestroy()
@@ -311,6 +361,10 @@ class MainActivity : Activity() {
         private const val HOME = "https://www.crunchyroll.com/"
         private const val KEY_SPEED = "speed"
         private const val DEFAULT_SPEED = 1.5f
+        private const val ORANGE = 0xFFF47521.toInt()
+        /** Fallback for WebViews without message support: load progress (0–100) that reveals the page. */
+        private const val REVEAL_PROGRESS = 80
+        private const val LOADING_TIMEOUT_MS = 15_000L
         private val ORIGIN_RULES = setOf("https://crunchyroll.com", "https://*.crunchyroll.com")
 
         private fun matchParent() =

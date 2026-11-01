@@ -436,6 +436,66 @@
     wake();
   }, true);
 
+  /* ------------------------------------------------------------------------------------------
+   * Loading screen: tell the app when the page has really rendered (top frame only)
+   * ------------------------------------------------------------------------------------------ */
+
+  // The site is a single-page app: the HTML loads fast, then it shows grey placeholder boxes
+  // (class names `loading-animation--…` / `…placeholder--…`) while it fetches the content. The
+  // app covers the page with a spinner from the start of a page load until we post "ready",
+  // i.e. once no placeholders are left on screen. In-site navigation (pushState / back) reloads
+  // nothing, so there we post "loading" ourselves if placeholders show up.
+  if (window.top === window) {
+    const LOADERS = '[class*="loading-animation--"], [class*="placeholder--"]';
+    const SETTLE_MS = 200;     // placeholders must stay gone this long (they come in waves)
+    const NAV_GRACE_MS = 1000; // after an in-site navigation, wait this long for placeholders
+    const post = (m) => { try { if (window.CRSpeed) window.CRSpeed.postMessage(m); } catch (_) {} };
+    const onScreen = (el) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth;
+    };
+    const loading = () => Array.prototype.some.call(document.querySelectorAll(LOADERS), onScreen);
+
+    let timer = 0;
+    // mode: 'full' = real page load (the app is already showing the spinner),
+    //       'push' = in-site navigation.
+    function watchLoading(mode) {
+      clearInterval(timer);
+      const start = Date.now();
+      let shown = mode !== 'push', seen = false, clearSince = 0;
+      const done = () => { clearInterval(timer); if (shown) post('ready'); };
+      timer = setInterval(() => {
+        if (!document.body) return;
+        if (loading()) {
+          seen = true;
+          clearSince = 0;
+          if (!shown) { shown = true; post('loading'); }
+          return;
+        }
+        if (!seen) {
+          // Page without placeholders: ready once fully loaded. In-site navigation without
+          // placeholders: the new view rendered straight away, so never show the spinner.
+          if (mode === 'full' && document.readyState !== 'complete') return;
+          if (mode === 'push') {
+            if (Date.now() - start > NAV_GRACE_MS) clearInterval(timer);
+            return;
+          }
+        }
+        if (!clearSince) clearSince = Date.now();
+        if (Date.now() - clearSince >= SETTLE_MS) done();
+      }, 100);
+    }
+    watchLoading('full');
+
+    const pushState = history.pushState;
+    history.pushState = function () {
+      const result = pushState.apply(this, arguments);
+      watchLoading('push');
+      return result;
+    };
+    addEventListener('popstate', () => watchLoading('push'));
+  }
+
   document.addEventListener('fullscreenchange', mount);
   document.addEventListener('webkitfullscreenchange', mount);
   addEventListener('resize', mount);
