@@ -28,7 +28,8 @@
   // `overflow-x: hidden` would turn <body> into its own scroll box, so the window would never
   // scroll and the site's scroll-to-top on navigation would do nothing.
   // The player's controls overlay also has a fixed min-height (so the control bar hangs below
-  // the video), and the volume button is pointless next to hardware volume keys.
+  // the video), the volume button is pointless next to hardware volume keys, and the player's own
+  // speed button duplicates our menu.
   const style = document.createElement('style');
   style.textContent =
     (window.top === window ? 'html, body { overflow-x: clip !important; max-width: 100vw !important; }\n' : '') +
@@ -37,7 +38,9 @@
     '[data-testid="player-controls-root"] { isolation: isolate; }\n' +
     // No double-tap-to-zoom on the player: otherwise Chrome swallows both clicks of a double tap.
     '#player-container, #player-container * { touch-action: manipulation !important; }\n' +
-    '[data-testid="volume-slider-container"] { display: none !important; }';
+    '[data-testid="volume-slider-container"] { display: none !important; }\n' +
+    // Hide the button's wrapper (the stack's direct child) so no empty slot is left behind.
+    '[data-testid="bottom-right-controls-stack"] > :has([data-testid="playback-speed-button"]) { display: none !important; }';
   (document.head || document.documentElement).appendChild(style);
 
   // The control row needs ~485px; scale it down to fit narrower players so every button,
@@ -171,14 +174,11 @@
     try { if (window.CRSpeed) window.CRSpeed.postMessage(String(r)); } catch (_) {}
   }
 
-  // A speed picked in Crunchyroll's own player menu is adopted (and saved). A change back to 1x
-  // is treated as the player resetting itself (new episode, ad, seek) and gets undone; use our
-  // menu to choose 1x.
+  // Crunchyroll's own speed button is hidden, so any other rate on the video is the player
+  // resetting itself (new episode, ad, seek); undo it.
   function onRateChange(e) {
     const v = e.target;
-    if (!(v instanceof HTMLMediaElement) || v.playbackRate === rate) return;
-    if (v.playbackRate !== 1 && v.playbackRate >= 0.25 && v.playbackRate <= 4) setRate(v.playbackRate);
-    else applyRate();
+    if (v instanceof HTMLMediaElement && v.playbackRate !== rate) applyRate();
   }
 
   /* ------------------------------------------------------------------------------------------
@@ -357,7 +357,7 @@
   }
 
   function refreshSpeedUi() {
-    speedBtn.textContent = label(rate); // rates from the player's own menu (e.g. 1.1x) show here too
+    speedBtn.textContent = label(rate);
     for (const opt of menu.children) opt.classList.toggle('on', Number(opt.dataset.speed) === rate);
   }
 
