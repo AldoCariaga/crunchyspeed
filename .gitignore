@@ -1,0 +1,16 @@
+# Gradle / Kotlin
+.gradle/
+.kotlin/
+build/
+app/build/
+
+# Machine-specific SDK path
+local.properties
+
+# IDE
+.idea/
+*.iml
+
+# Outputs
+*.apk
+*.aab
