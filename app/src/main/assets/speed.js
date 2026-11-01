@@ -443,12 +443,16 @@
   // The site is a single-page app: the HTML loads fast, then it shows grey placeholder boxes
   // (class names `loading-animation--…` / `…placeholder--…`) while it fetches the content. The
   // app covers the page with a spinner from the start of a page load until we post "ready",
-  // i.e. once no placeholders are left on screen. In-site navigation (pushState / back) reloads
-  // nothing, so there we post "loading" ourselves if placeholders show up.
+  // i.e. once no placeholders are left on screen. In-site navigation reloads nothing, so there
+  // we drive the spinner ourselves: going forward (pushState) shows it only if placeholders show
+  // up; going back (popstate) always shows it (the app already does on the back gesture), since
+  // the old page lingers for a moment and the previous one often returns without placeholders.
   if (window.top === window) {
     const LOADERS = '[class*="loading-animation--"], [class*="placeholder--"]';
-    const SETTLE_MS = 200;     // placeholders must stay gone this long (they come in waves)
-    const NAV_GRACE_MS = 1000; // after an in-site navigation, wait this long for placeholders
+    const SETTLE_MS = 200;      // placeholders must stay gone this long (they come in waves)
+    const BACK_SETTLE_MS = 300; // after going back, give the previous view this long to redraw
+    const NAV_GRACE_MS = 1000;  // after a forward in-site navigation, wait this long for placeholders
+    const BACK_REDRAW_MS = 1500; // after going back, give up waiting for the page to change after this
     const post = (m) => { try { if (window.CRSpeed) window.CRSpeed.postMessage(m); } catch (_) {} };
     const onScreen = (el) => {
       const r = el.getBoundingClientRect();
@@ -456,16 +460,26 @@
     };
     const loading = () => Array.prototype.some.call(document.querySelectorAll(LOADERS), onScreen);
 
-    let timer = 0;
+    let timer = 0, redraw = null;
     // mode: 'full' = real page load (the app is already showing the spinner),
-    //       'push' = in-site navigation.
+    //       'push' = forward in-site navigation, 'back' = in-site history navigation.
     function watchLoading(mode) {
       clearInterval(timer);
+      if (redraw) redraw.disconnect();
       const start = Date.now();
       let shown = mode !== 'push', seen = false, clearSince = 0;
+      // Going back, the old view stays up until the site swaps in the previous one (that can take
+      // a second); only start the settle countdown once the page has actually changed.
+      let changed = mode !== 'back';
+      if (mode === 'back' && document.body) {
+        post('loading');
+        redraw = new MutationObserver(() => { changed = true; redraw.disconnect(); });
+        redraw.observe(document.body, { childList: true, subtree: true });
+      }
       const done = () => { clearInterval(timer); if (shown) post('ready'); };
       timer = setInterval(() => {
         if (!document.body) return;
+        if (!changed && Date.now() - start < BACK_REDRAW_MS) return;
         if (loading()) {
           seen = true;
           clearSince = 0;
@@ -473,7 +487,7 @@
           return;
         }
         if (!seen) {
-          // Page without placeholders: ready once fully loaded. In-site navigation without
+          // Page without placeholders: ready once fully loaded. Forward navigation without
           // placeholders: the new view rendered straight away, so never show the spinner.
           if (mode === 'full' && document.readyState !== 'complete') return;
           if (mode === 'push') {
@@ -482,7 +496,7 @@
           }
         }
         if (!clearSince) clearSince = Date.now();
-        if (Date.now() - clearSince >= SETTLE_MS) done();
+        if (Date.now() - clearSince >= (mode === 'back' ? BACK_SETTLE_MS : SETTLE_MS)) done();
       }, 100);
     }
     watchLoading('full');
@@ -493,7 +507,7 @@
       watchLoading('push');
       return result;
     };
-    addEventListener('popstate', () => watchLoading('push'));
+    addEventListener('popstate', () => watchLoading('back'));
   }
 
   document.addEventListener('fullscreenchange', mount);

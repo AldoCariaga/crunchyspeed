@@ -295,13 +295,13 @@ class MainActivity : Activity() {
         callback?.onCustomViewHidden()
     }
 
-    private fun showLoading() {
+    private fun showLoading(timeoutMs: Long = LOADING_TIMEOUT_MS) {
         loadingOverlay.animate().cancel()
         loadingOverlay.alpha = 1f
         loadingOverlay.visibility = View.VISIBLE
         // Never trap the user behind the spinner if a slow resource stalls the progress bar.
         root.removeCallbacks(hideLoadingFallback)
-        root.postDelayed(hideLoadingFallback, LOADING_TIMEOUT_MS)
+        root.postDelayed(hideLoadingFallback, timeoutMs)
     }
 
     private fun hideLoading() {
@@ -329,7 +329,13 @@ class MainActivity : Activity() {
     override fun onBackPressed() {
         when {
             fullscreenView != null -> exitFullscreen()
-            webView.canGoBack() -> webView.goBack()
+            webView.canGoBack() -> {
+                // Cover the old page right away; it can linger ~1 s before the previous one shows.
+                // The page (popstate) or the new load (onPageStarted) then takes over the spinner;
+                // the short timeout covers a back step that changes nothing visible.
+                if (pageReportsReady) showLoading(BACK_TIMEOUT_MS)
+                webView.goBack()
+            }
             else -> super.onBackPressed()
         }
     }
@@ -365,6 +371,7 @@ class MainActivity : Activity() {
         /** Fallback for WebViews without message support: load progress (0–100) that reveals the page. */
         private const val REVEAL_PROGRESS = 80
         private const val LOADING_TIMEOUT_MS = 15_000L
+        private const val BACK_TIMEOUT_MS = 3_000L
         private val ORIGIN_RULES = setOf("https://crunchyroll.com", "https://*.crunchyroll.com")
 
         private fun matchParent() =
