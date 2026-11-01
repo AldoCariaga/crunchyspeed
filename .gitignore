@@ -14,3 +14,8 @@ local.properties
 # Outputs
 *.apk
 *.aab
+
+# Release signing (keep the key out of git)
+keystore.properties
+*.jks
+*.keystore
