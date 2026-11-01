@@ -425,6 +425,15 @@
   for (const type of ['play', 'playing', 'pause', 'ended', 'emptied']) {
     document.addEventListener(type, reportPlaying, true);
   }
+  // The app sends "pause" when the user swipes back, so the video doesn't keep playing behind
+  // the loading screen while the site switches back to the previous page.
+  try {
+    if (window.CRSpeed) {
+      window.CRSpeed.addEventListener('message', (e) => {
+        if (e.data === 'pause') videos().forEach((v) => v.pause());
+      });
+    }
+  } catch (_) {}
   addEventListener('pagehide', () => {
     reportedPlaying = false;
     try { if (window.CRSpeed) window.CRSpeed.postMessage('idle'); } catch (_) {}

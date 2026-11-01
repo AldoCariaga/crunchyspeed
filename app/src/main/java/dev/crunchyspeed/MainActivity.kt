@@ -334,6 +334,8 @@ class MainActivity : Activity() {
                 // The page (popstate) or the new load (onPageStarted) then takes over the spinner;
                 // the short timeout covers a back step that changes nothing visible.
                 if (pageReportsReady) showLoading(BACK_TIMEOUT_MS)
+                // Stop the video now; the site can take a second to tear the player down.
+                playingFrames.toList().forEach { frame -> runCatching { frame.postMessage("pause") } }
                 webView.goBack()
             }
             else -> super.onBackPressed()
