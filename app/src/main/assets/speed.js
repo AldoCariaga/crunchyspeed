@@ -24,11 +24,14 @@
 
   // In desktop mode, Crunchyroll's hidden header dropdowns stick out past a phone-width screen,
   // which makes the whole page lay out wider than the screen. Clip that sideways overflow (top
-  // frame only). The player's controls overlay also has a fixed min-height (so the control bar
-  // hangs below the video), and the volume button is pointless next to hardware volume keys.
+  // frame only). Use `clip`, not `hidden`: Crunchyroll gives <body> a fixed 100% height, and
+  // `overflow-x: hidden` would turn <body> into its own scroll box, so the window would never
+  // scroll and the site's scroll-to-top on navigation would do nothing.
+  // The player's controls overlay also has a fixed min-height (so the control bar hangs below
+  // the video), and the volume button is pointless next to hardware volume keys.
   const style = document.createElement('style');
   style.textContent =
-    (window.top === window ? 'html, body { overflow-x: hidden !important; max-width: 100vw !important; }\n' : '') +
+    (window.top === window ? 'html, body { overflow-x: clip !important; max-width: 100vw !important; }\n' : '') +
     '#player-container .katamariDesktop { min-height: 0 !important; }\n' +
     // Our UI lives inside this element; keep its z-index local so the site header stays on top.
     '[data-testid="player-controls-root"] { isolation: isolate; }\n' +
