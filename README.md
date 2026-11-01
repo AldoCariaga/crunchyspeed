@@ -1,5 +1,8 @@
 # CrunchySpeed
 
+> **Unofficial personal project.** Not affiliated with, endorsed by or sponsored by Crunchyroll.
+> See [Disclaimer](#disclaimer).
+
 A personal Android app that wraps the Crunchyroll website in a full-screen WebView and adds the
 playback controls the official app is missing.
 
@@ -48,4 +51,24 @@ Debug builds enable WebView remote debugging (`chrome://inspect`).
   some devices.
 - The script depends on Crunchyroll's player markup (`data-testid` attributes). If the site
   changes, the script may need small updates.
-- For personal use only. Not affiliated with Crunchyroll.
+
+## Disclaimer
+
+- This is a personal, non-commercial hobby project, shared as-is in case the code is useful to
+  someone. It is **not affiliated with, endorsed by or sponsored by Crunchyroll, LLC** or its
+  parent companies. "Crunchyroll" is a trademark of its owner. It is used here only to say which
+  website the app works with.
+- The repository contains no Crunchyroll code, video or other content. The app loads the public
+  crunchyroll.com website, and you need your own Crunchyroll account (and subscription, where
+  required).
+- The app does not bypass DRM, paywalls or region restrictions, and it does not download, record
+  or redistribute video. Playback runs through Crunchyroll's own player and Widevine DRM. The app
+  only changes how the player looks and responds to taps on your device.
+- Using a modified client may go against Crunchyroll's Terms of Service. Use it at your own risk.
+  The software comes with no warranty (see [LICENSE](LICENSE)).
+- If you represent Crunchyroll and have a concern about this project, please open an issue and it
+  will be addressed promptly.
+
+## License
+
+[MIT](LICENSE)
