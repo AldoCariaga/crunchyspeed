@@ -1,7 +1,7 @@
 // CrunchySpeed: phone-friendly additions for the Crunchyroll web player.
 //  - playback-speed menu (top-right of the video)
 //  - centre controls: back 10 s / play-pause / forward 10 s, shown together with the player's controls
-//  - taps: first tap only reveals the controls; tap again to play/pause; double tap left/right = -/+10 s
+//  - taps: tap toggles the controls (never pauses); double tap left/right = -/+10 s
 //  - layout fixes for the desktop player on a phone-sized screen
 // Injected at document start into every *.crunchyroll.com frame. The app prepends
 // `window.__CR_SAVED_SPEED = <n>;` and exposes `CRSpeed.postMessage()` to save speed changes.
@@ -124,6 +124,34 @@
     root.dispatchEvent(new MouseEvent('mouseup', init));
   }
 
+  // The player shows its controls while the mouse is over it and hides them ~0.6 s after the
+  // mouse leaves (native mouseenter/mouseleave listeners on a wrapper inside #player-container).
+  // A touch never really leaves, so to hide the controls we fake the leave, and fake the enter
+  // again on the next touch on the player: otherwise it would still think the mouse is outside
+  // and hide the controls again ~0.6 s after every tap.
+  let fakedLeave = false;
+  function hoverChain() {
+    const chain = [];
+    const stop = $('#player-container');
+    for (let el = $('[data-testid="player-controls-root"]'); el && el !== stop; el = el.parentElement) chain.push(el);
+    if (stop) chain.push(stop);
+    return chain; // innermost first
+  }
+  function hideControls() {
+    const chain = hoverChain();
+    if (!chain.length) return;
+    // mouseleave doesn't bubble: fire it on every element the mouse "leaves", innermost first.
+    for (const el of chain) el.dispatchEvent(new MouseEvent('mouseleave', { relatedTarget: document.body }));
+    fakedLeave = true;
+  }
+  function undoFakedLeave(target) {
+    if (!fakedLeave) return;
+    const chain = hoverChain();
+    if (!chain.length || !chain[chain.length - 1].contains(target)) return; // touched outside the player
+    fakedLeave = false;
+    for (const el of chain.reverse()) el.dispatchEvent(new MouseEvent('mouseenter', { relatedTarget: document.body }));
+  }
+
   /* ------------------------------------------------------------------------------------------
    * Playback speed
    * ------------------------------------------------------------------------------------------ */
@@ -160,7 +188,8 @@
   // We take over taps on the empty video area (not on the player's buttons, scrubber or menus):
   //  - controls hidden: the tap only reveals them (the player does that on mousedown; we drop
   //    the click, which would otherwise toggle play/pause)
-  //  - controls shown: the tap toggles play/pause, after a short wait to rule out a double tap
+  //  - controls shown: the tap hides them, after a short wait to rule out a double tap
+  //    (pause with the centre play button)
   //  - double tap: skip 10 s back (left half) or forward (right half); keep tapping to skip more
   const BACKGROUND_IDS = new Set([
     'player-controls-root', 'top-gradient', 'top-gradient-background', 'ratings-advisories-overlay',
@@ -178,6 +207,7 @@
   addEventListener('pointerdown', (e) => {
     downOnBackground = isVideoBackground(e.target);
     downWithControlsHidden = downOnBackground && playerControlsShown() === false;
+    undoFakedLeave(e.target);
   }, true);
 
   addEventListener('click', (e) => {
@@ -198,7 +228,7 @@
     }
     if (downWithControlsHidden) return; // first tap just reveals the controls
     clearTimeout(singleTapTimer);
-    singleTapTimer = setTimeout(() => { singleTapTimer = 0; togglePlay(); }, DOUBLE_TAP_MS);
+    singleTapTimer = setTimeout(() => { singleTapTimer = 0; hideControls(); }, DOUBLE_TAP_MS);
   }, true);
 
   // The desktop player toggles fullscreen on double click; double tap means "skip" here.

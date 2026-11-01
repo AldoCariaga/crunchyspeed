@@ -10,7 +10,8 @@ playback controls the official app is missing.
 
 - **Playback speed menu**: 0.5x–2x in 0.25 steps. The chosen speed is remembered across episodes
   and app restarts. Speeds picked in Crunchyroll's own player menu are picked up too.
-- **Phone-style taps**: the first tap only reveals the controls. Tap again to play or pause.
+- **Phone-style taps**: a tap shows the controls and another tap hides them; tapping
+  never pauses. Pause with the centre play button.
 - **Double tap to skip**: the left half skips back 10 s and the right half skips forward 10 s.
   Keep tapping to skip further.
 - **Centre controls**: back 10 / play-pause / forward 10, shown together with the player controls.
