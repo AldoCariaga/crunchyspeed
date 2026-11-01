@@ -13,8 +13,8 @@ android {
         applicationId = "dev.crunchyspeed"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = 4
+        versionName = "1.0.3"
     }
 
     // Release signing key details live in keystore.properties at the repo root (not committed).
