@@ -39,8 +39,13 @@
     // No double-tap-to-zoom on the player: otherwise Chrome swallows both clicks of a double tap.
     '#player-container, #player-container * { touch-action: manipulation !important; }\n' +
     '[data-testid="volume-slider-container"] { display: none !important; }\n' +
-    // Hide the button's wrapper (the stack's direct child) so no empty slot is left behind.
-    '[data-testid="bottom-right-controls-stack"] > :has([data-testid="playback-speed-button"]) { display: none !important; }';
+    // The speed button itself (works without :has() too)...
+    '[data-testid="playback-speed-button"] { display: none !important; }\n' +
+    // ...and its wrapper (the stack's direct child) so no empty slot is left behind, but only
+    // when the wrapper holds no other control.
+    '[data-testid="bottom-right-controls-stack"] > :has([data-testid="playback-speed-button"])' +
+    ':not(:has(:is(button, [role="button"]):not([data-testid="playback-speed-button"], [data-testid="playback-speed-button"] *)))' +
+    ' { display: none !important; }';
   (document.head || document.documentElement).appendChild(style);
 
   // The control row needs ~485px; scale it down to fit narrower players so every button,
