@@ -181,13 +181,18 @@
     return !!b && b.getClientRects().length > 0;
   }
 
+  // When the user last touched the player's own controls or pressed a key (see noteGesture).
+  const GESTURE_MS = 500;
+  let lastGestureAt = -Infinity;
+
   // A speed change that isn't ours is usually the player resetting itself (new episode, ad,
-  // seek) and gets undone. But if the player's own speed button is showing, a pick there is
-  // adopted (and saved) instead. 1x is what the player resets to, so it is always undone; use
-  // our menu to choose 1x.
+  // seek) and gets undone. A change the user made in the player itself is adopted (and saved)
+  // instead: one that follows right after a tap or key press on the player (its speed menu,
+  // a settings submenu, a keyboard shortcut), or any pick while its speed button is showing.
+  // 1x is what the player resets to, so it is always undone; use our menu to choose 1x.
   function isDeliberate(r) {
     if (r === 1 || !(r >= 0.25 && r <= 4)) return false;
-    return nativeSpeedButtonShown();
+    return performance.now() - lastGestureAt < GESTURE_MS || nativeSpeedButtonShown();
   }
 
   // If the player puts its own rate back every time we undo it (e.g. a speed it remembered from
@@ -466,6 +471,17 @@
 
   // Media events don't bubble, but capture-phase listeners on document still see them.
   document.addEventListener('ratechange', onRateChange, true);
+
+  // Taps on our own UI and on the empty video area (skips, show/hide) are not speed changes,
+  // but they can lead to a player reset (seek), so they don't count as gestures. Background
+  // clicks are already stopped by our tap handler on window before they get here.
+  function noteGesture(e) {
+    const path = e.composedPath();
+    if ((speedHost && path.includes(speedHost)) || (overlay && path.includes(overlay))) return;
+    if (e.type === 'pointerdown' && isVideoBackground(e.target)) return;
+    lastGestureAt = performance.now();
+  }
+  for (const type of ['pointerdown', 'click', 'keydown']) document.addEventListener(type, noteGesture, true);
   document.addEventListener('loadedmetadata', applyRate, true);
   document.addEventListener('play', () => { applyRate(); updatePlayIcon(); }, true);
   document.addEventListener('pause', updatePlayIcon, true);
