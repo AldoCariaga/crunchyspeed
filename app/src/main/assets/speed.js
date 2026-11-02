@@ -174,13 +174,6 @@
     try { if (window.CRSpeed) window.CRSpeed.postMessage(String(r)); } catch (_) {}
   }
 
-  // Crunchyroll's own speed button is hidden, so any other rate on the video is the player
-  // resetting itself (new episode, ad, seek); undo it.
-  function onRateChange(e) {
-    const v = e.target;
-    if (v instanceof HTMLMediaElement && v.playbackRate !== rate) applyRate();
-  }
-
   /* ------------------------------------------------------------------------------------------
    * Taps on the video
    * ------------------------------------------------------------------------------------------ */
@@ -438,7 +431,9 @@
    * ------------------------------------------------------------------------------------------ */
 
   // Media events don't bubble, but capture-phase listeners on document still see them.
-  document.addEventListener('ratechange', onRateChange, true);
+  // Crunchyroll's own speed button is hidden, so any other rate on a video (playbackRate or
+  // defaultPlaybackRate) is the player resetting itself (new episode, ad, seek); undo it.
+  document.addEventListener('ratechange', applyRate, true);
   document.addEventListener('loadedmetadata', applyRate, true);
   document.addEventListener('play', () => { applyRate(); updatePlayIcon(); }, true);
   document.addEventListener('pause', updatePlayIcon, true);
