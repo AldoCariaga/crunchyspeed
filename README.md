@@ -9,7 +9,9 @@ playback controls the official app is missing.
 ## Features
 
 - **Playback speed menu**: 0.5x–2x in 0.25 steps. The chosen speed is remembered across episodes
-  and app restarts. Speeds picked in Crunchyroll's own player menu are picked up too.
+  and app restarts. The player's own speed button is hidden, since it duplicates this menu.
+  Speeds changed in the player itself (for example with a keyboard shortcut) are picked up too,
+  except 1x, which is what the player resets to; choose 1x from this menu.
 - **Phone-style taps**: a tap shows the controls and another tap hides them; tapping
   never pauses. Pause with the centre play button.
 - **Double tap to skip**: the left half skips back 10 s and the right half skips forward 10 s.
@@ -28,7 +30,7 @@ playback controls the official app is missing.
 - `assets/speed.js` is injected at document start into every Crunchyroll frame using
   `WebViewCompat.addDocumentStartJavaScript`. It adds the speed menu, the tap handling and the centre
   controls. It also fixes the desktop player's layout on a phone-sized screen: it clips sideways
-  overflow, hides the volume button and scales the control bar to fit. The UI is mounted inside the
+  overflow, hides the volume and speed buttons and scales the control bar to fit. The UI is mounted inside the
   player's `[data-testid="player-controls-root"]`, which keeps the player's own controls from
   auto-hiding when you tap the buttons.
 
