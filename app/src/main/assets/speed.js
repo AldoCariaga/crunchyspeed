@@ -324,14 +324,7 @@
     speedBtn = shadow.querySelector('.btn');
     menu = shadow.querySelector('.menu');
 
-    for (const s of SPEEDS) {
-      const opt = document.createElement('button');
-      opt.className = 'opt';
-      opt.textContent = label(s);
-      opt.dataset.speed = String(s);
-      opt.addEventListener('click', () => { setRate(s); closeMenu(); });
-      menu.appendChild(opt);
-    }
+    for (const s of SPEEDS) menu.appendChild(makeSpeedOption(s));
     speedBtn.addEventListener('click', () => {
       keepControlsAlive();
       menu.classList.contains('open') ? closeMenu() : openMenu();
@@ -388,8 +381,29 @@
     isolateEvents(overlay);
   }
 
+  function makeSpeedOption(s) {
+    const opt = document.createElement('button');
+    opt.className = 'opt';
+    opt.textContent = label(s);
+    opt.dataset.speed = String(s);
+    opt.addEventListener('click', () => { setRate(Number(opt.dataset.speed)); closeMenu(); });
+    return opt;
+  }
+
   function refreshSpeedUi() {
     speedBtn.textContent = label(rate);
+    // A rate picked in the player itself (e.g. 1.1x), or saved that way by an older version,
+    // isn't one of ours: list it as an extra option, in order, so the current speed is marked.
+    let extra = menu.querySelector('.opt.extra');
+    if (SPEEDS.includes(rate)) {
+      if (extra) extra.remove();
+    } else {
+      if (!extra) { extra = makeSpeedOption(rate); extra.classList.add('extra'); }
+      extra.textContent = label(rate);
+      extra.dataset.speed = String(rate);
+      const next = Array.from(menu.children).find((o) => o !== extra && Number(o.dataset.speed) > rate);
+      menu.insertBefore(extra, next || null);
+    }
     for (const opt of menu.children) opt.classList.toggle('on', Number(opt.dataset.speed) === rate);
   }
 
