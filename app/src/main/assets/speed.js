@@ -48,8 +48,9 @@
     ' { display: none !important; }';
   (document.head || document.documentElement).appendChild(style);
 
-  // The control row needs ~485px; scale it down to fit narrower players so every button,
-  // including fullscreen, stays on screen.
+  // The control row can be wider than the player on a phone; scale it down to fit so every
+  // button, including fullscreen, stays on screen. (Its width depends on which of the player's
+  // buttons are hidden above, so it is measured rather than assumed.)
   function fitControls() {
     const right = $('[data-testid="bottom-right-controls-stack"]');
     const bar = $('[data-testid="bottom-controls-autohide"]');
