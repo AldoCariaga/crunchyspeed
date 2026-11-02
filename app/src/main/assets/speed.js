@@ -174,6 +174,28 @@
     try { if (window.CRSpeed) window.CRSpeed.postMessage(String(r)); } catch (_) {}
   }
 
+  // Crunchyroll's own speed button is normally hidden (see the style above), but that CSS can
+  // miss: the site renames its test ids, or the WebView is too old for :has().
+  function nativeSpeedButtonShown() {
+    const b = $('[data-testid="playback-speed-button"]');
+    return !!b && b.getClientRects().length > 0;
+  }
+
+  // A speed change that isn't ours is usually the player resetting itself (new episode, ad,
+  // seek) and gets undone. But if the player's own speed button is showing, a pick there is
+  // adopted (and saved) instead. 1x is what the player resets to, so it is always undone; use
+  // our menu to choose 1x.
+  function isDeliberate(r) {
+    if (r === 1 || !(r >= 0.25 && r <= 4)) return false;
+    return nativeSpeedButtonShown();
+  }
+
+  function onRateChange(e) {
+    const r = e.target.playbackRate;
+    if (r !== rate && isDeliberate(r)) setRate(r);
+    else applyRate();
+  }
+
   /* ------------------------------------------------------------------------------------------
    * Taps on the video
    * ------------------------------------------------------------------------------------------ */
@@ -431,9 +453,7 @@
    * ------------------------------------------------------------------------------------------ */
 
   // Media events don't bubble, but capture-phase listeners on document still see them.
-  // Crunchyroll's own speed button is hidden, so any other rate on a video (playbackRate or
-  // defaultPlaybackRate) is the player resetting itself (new episode, ad, seek); undo it.
-  document.addEventListener('ratechange', applyRate, true);
+  document.addEventListener('ratechange', onRateChange, true);
   document.addEventListener('loadedmetadata', applyRate, true);
   document.addEventListener('play', () => { applyRate(); updatePlayIcon(); }, true);
   document.addEventListener('pause', updatePlayIcon, true);
