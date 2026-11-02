@@ -190,10 +190,22 @@
     return nativeSpeedButtonShown();
   }
 
+  // If the player puts its own rate back every time we undo it (e.g. a speed it remembered from
+  // before), the two ratechange handlers would bounce events back and forth. Undo at most a few
+  // times per second from events; the 500 ms tick keeps enforcing our rate after that.
+  const MAX_REVERTS_PER_SEC = 5;
+  let revertsSince = 0, reverts = 0;
+  function revertRate() {
+    if (videos().every((v) => v.playbackRate === rate && v.defaultPlaybackRate === rate)) return;
+    const now = performance.now();
+    if (now - revertsSince > 1000) { revertsSince = now; reverts = 0; }
+    if (++reverts <= MAX_REVERTS_PER_SEC) applyRate();
+  }
+
   function onRateChange(e) {
     const r = e.target.playbackRate;
     if (r !== rate && isDeliberate(r)) setRate(r);
-    else applyRate();
+    else revertRate();
   }
 
   /* ------------------------------------------------------------------------------------------
